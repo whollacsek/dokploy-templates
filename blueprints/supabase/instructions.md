@@ -110,11 +110,13 @@ Everything is signed with the symmetric `JWT_SECRET` (HS256) by default. Moving
 to an asymmetric key pair needs an EC P-256 key, which Dokploy's variable
 helpers cannot generate, so `JWT_KEYS` and `JWT_JWKS` ship empty. To switch:
 
-1. Clone the Supabase repo and go to its `docker/` directory:
+1. Fetch Supabase's key generator. Only this one script is needed — cloning the
+   whole repository pulls a very large monorepo for a 7 KB file. It needs `node`
+   (>= 16), or Docker as a fallback:
 
    ```bash
-   git clone --depth 1 https://github.com/supabase/supabase
-   cd supabase/docker
+   mkdir supabase-keys && cd supabase-keys
+   curl -fsSLO https://raw.githubusercontent.com/supabase/supabase/master/docker/utils/add-new-auth-keys.sh
    ```
 
 2. Put **this deployment's** `JWT_SECRET` (from the Environment tab) into a local `.env`:
@@ -123,15 +125,23 @@ helpers cannot generate, so `JWT_KEYS` and `JWT_JWKS` ship empty. To switch:
    echo "JWT_SECRET=<your-JWT_SECRET>" > .env
    ```
 
-3. Generate the keys:
+3. Generate the keys. `--update-env` is required: without it the script prints
+   only four of the six values, and writes `ANON_KEY_ASYMMETRIC` and
+   `SERVICE_ROLE_KEY_ASYMMETRIC` to `.env` alone.
 
    ```bash
-   sh utils/add-new-auth-keys.sh
+   sh add-new-auth-keys.sh --update-env
    ```
 
-4. Replace all six values in the Environment tab with the ones it prints, then
-   redeploy: `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
-   `ANON_KEY_ASYMMETRIC`, `SERVICE_ROLE_KEY_ASYMMETRIC`, `JWT_KEYS`, `JWT_JWKS`.
+   It exits with status **1** after writing the keys, because it then looks for a
+   `docker-compose.yml` to patch and there is none in this directory. That is
+   expected here — this blueprint already wires `GOTRUE_JWT_KEYS`,
+   `API_JWT_JWKS`, `JWT_JWKS` and `SUPABASE_JWKS`. Check `.env` for the six
+   values rather than the exit code.
+
+4. Copy all six values from `.env` into the Environment tab, then redeploy:
+   `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ANON_KEY_ASYMMETRIC`,
+   `SERVICE_ROLE_KEY_ASYMMETRIC`, `JWT_KEYS`, `JWT_JWKS`.
 
 Set them **all together**. `JWT_KEYS` makes Auth sign tokens with ES256, while
 `JWT_JWKS` is what PostgREST, Realtime, Storage and Edge Functions use to verify
@@ -146,6 +156,16 @@ Review these variables in the **Environment** tab before using Supabase in produ
 - `SUPABASE_PUBLIC_URL` and `API_EXTERNAL_URL`: must point to your Supabase domain with the correct `http`/`https` scheme (the template sets them from your domain automatically).
 - `SITE_URL` and `ADDITIONAL_REDIRECT_URLS`: must point to the application that uses Supabase for authentication.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL`, `SMTP_SENDER_NAME`: required for auth emails (sign-up confirmations, password resets). The template ships with placeholder values, so no real emails are sent until you configure a real SMTP provider.
+
+**Enable `pg_graphql` if you use the GraphQL endpoint.** `/graphql/v1` is routed by
+the gateway, but the extension is not installed on a fresh database, so the endpoint
+answers `pg_graphql extension is not enabled`. Supabase's hosted platform ships it
+enabled, so code that works there needs one statement here — run it once from
+Studio's SQL editor:
+
+```sql
+create extension if not exists pg_graphql with schema graphql;
+```
 
 ## Warning: changing POSTGRES_PASSWORD after the first deploy
 

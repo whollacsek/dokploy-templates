@@ -325,6 +325,12 @@ services:
       # JWKS for token verification (EC public + legacy symmetric)
       SUPABASE_JWKS: ${JWT_JWKS:-{"keys":[]}}
       SUPABASE_URL: http://api-gw:8000
+      # Auth signs tokens with API_EXTERNAL_URL as the issuer, but SUPABASE_URL
+      # above is the INTERNAL gateway address. A function that derives its
+      # expected issuer from SUPABASE_URL - which is what the official
+      # _shared/jwt/default.ts example does - therefore rejects every valid
+      # token. SB_JWT_ISSUER is the override that example already prefers.
+      SB_JWT_ISSUER: ${API_EXTERNAL_URL}
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
